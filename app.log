@@ -1,0 +1,18 @@
+2024-09-27 12:49:27,099 - INFO - PyTorch version 2.4.0 available.
+2024-09-27 12:49:27,293 - INFO - Use pytorch device_name: cpu
+2024-09-27 12:49:27,294 - INFO - Load pretrained SentenceTransformer: sentence-transformers/all-mpnet-base-v2
+2024-09-27 12:49:30,396 - INFO - Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2024-09-27 12:49:30,610 - INFO - HTTP Request: GET http://127.0.0.1:7860/startup-events "HTTP/1.1 200 OK"
+2024-09-27 12:49:30,624 - INFO - HTTP Request: HEAD http://127.0.0.1:7860/ "HTTP/1.1 200 OK"
+2024-09-27 12:49:31,327 - INFO - HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+2024-09-27 12:49:31,327 - INFO - HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+2024-09-27 12:49:31,722 - INFO - HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+2024-09-27 12:52:27,608 - INFO - PyTorch version 2.4.0 available.
+2024-09-27 12:52:27,851 - INFO - Use pytorch device_name: cpu
+2024-09-27 12:52:27,851 - INFO - Load pretrained SentenceTransformer: sentence-transformers/all-mpnet-base-v2
+2024-09-27 12:52:31,361 - INFO - Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2024-09-27 12:52:31,591 - INFO - HTTP Request: GET http://127.0.0.1:7860/startup-events "HTTP/1.1 200 OK"
+2024-09-27 12:52:31,610 - INFO - HTTP Request: HEAD http://127.0.0.1:7860/ "HTTP/1.1 200 OK"
+2024-09-27 12:52:33,749 - INFO - HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+2024-09-27 12:52:33,757 - INFO - HTTP Request: GET https://checkip.amazonaws.com/ "HTTP/1.1 200 "
+2024-09-27 12:52:33,793 - INFO - HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
