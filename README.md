@@ -1,4 +1,3 @@
-
 # miniOmniLlama: Assistente AI com Cadeia de Raciocínio Aprimorada
 
 ![Thumbnail do miniOmniLlama](thumbnail.png)
@@ -35,6 +34,8 @@ O miniOmniLlama utiliza um processo sofisticado para gerar e refinar cadeias de 
 
 - Python 3.8+
 - Dependências listadas em `requirements.txt`
+- Ollama instalado no sistema
+- Modelo llama3.2 disponível no Ollama
 
 ## Instalação
 
@@ -55,20 +56,32 @@ O miniOmniLlama utiliza um processo sofisticado para gerar e refinar cadeias de 
    pip install -r requirements.txt
    ```
 
+4. Instale o Ollama seguindo as instruções em [https://ollama.ai/](https://ollama.ai/)
+
+5. Baixe e execute o modelo llama3.2 no Ollama:
+   ```
+   ollama run llama3.2
+   ```
+
 ## Uso
 
-1. Execute o script principal:
+1. Certifique-se de que o modelo llama3.2 está rodando no Ollama:
+   ```
+   ollama run llama3.2
+   ```
+
+2. Execute o script principal:
    ```
    python interface.py
    ```
 
-2. Abra o navegador e acesse o endereço local fornecido (geralmente http://127.0.0.1:7860).
+3. Abra o navegador e acesse o endereço local fornecido (geralmente http://127.0.0.1:7860).
 
-3. Digite uma pergunta na caixa de texto e clique em "Enviar".
+4. Digite uma pergunta na caixa de texto e clique em "Enviar".
 
-4. Observe os passos de raciocínio gerados e a resposta final.
+5. Observe os passos de raciocínio gerados e a resposta final.
 
-5. Se desejar, aprove a cadeia de raciocínio para uso futuro clicando em "Aprovar cadeia de raciocínio".
+6. Se desejar, aprove a cadeia de raciocínio para uso futuro clicando em "Aprovar cadeia de raciocínio".
 
 ## Estrutura do Projeto
 
