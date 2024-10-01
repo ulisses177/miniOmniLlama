@@ -13,11 +13,18 @@ from langchain.docstore.document import Document
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 
-def make_api_call(model, prompt, max_tokens):
+class ModeloLLM:
+    def __init__(self, nome_modelo="llama3.2"):
+        self.modelo = Ollama(model=nome_modelo)
+    
+    def gerar(self, prompt, max_tokens, temperatura):
+        return make_api_call(self.modelo, prompt, max_tokens, temperatura)
+
+def make_api_call(model, prompt, max_tokens, temperature):
     for attempt in range(3):
         try:
             logging.info(f"Tentativa {attempt + 1} de 3 para gerar resposta.")
-            response = model.generate([prompt], model_kwargs={"max_tokens": max_tokens})
+            response = model.generate([prompt], model_kwargs={"max_tokens": max_tokens, "temperature": temperature})
             generated_text = response.generations[0][0].text.strip()
 
             logging.info("Resposta gerada pelo modelo:")
@@ -29,26 +36,143 @@ def make_api_call(model, prompt, max_tokens):
                 time.sleep(0.05)
             print()
 
-            # Extrai JSON da resposta
-            json_match = re.search(r'\{.*?\}', generated_text, re.DOTALL)
-            if json_match:
-                json_text = json_match.group()
-                return json.loads(json_text)
-            else:
-                raise json.JSONDecodeError("JSON não encontrado na resposta.", generated_text, 0)
-        except json.JSONDecodeError:
-            logging.error("JSONDecodeError: Resposta não está no formato JSON esperado.")
-            if attempt == 2:
-                return {"title": "Erro", "content": "A resposta não está no formato JSON esperado.", "next_action": "final_answer"}
+            return generated_text
         except Exception as e:
             logging.error(f"Exception: {str(e)}")
             if attempt == 2:
-                return {
-                    "title": "Erro",
-                    "content": f"Falha ao gerar resposta após 3 tentativas. Erro: {str(e)}",
-                    "next_action": "final_answer"
-                }
+                return f"Falha ao gerar resposta após 3 tentativas. Erro: {str(e)}"
             time.sleep(1)
+
+def carregar_passos_padrao():
+    arquivo_passos = 'passos_padrao.txt'
+    passos_padrao = [
+        "Compreensão da pergunta",
+        "Identificação dos dados relevantes",
+        "Formulação de hipóteses",
+        "Análise lógica",
+        "Verificação da consistência",
+        "Consideração de alternativas",
+        "Síntese da resposta",
+        "Revisão e refinamento",
+        "Verificação da lógica"
+    ]
+    
+    if not os.path.exists(arquivo_passos):
+        with open(arquivo_passos, 'w') as file:
+            for passo in passos_padrao:
+                file.write(f"{passo}\n")
+    
+    with open(arquivo_passos, 'r') as file:
+        return [line.strip() for line in file if line.strip()]
+
+def responde_chain_of_thought(modelo, pergunta, vectorstore):
+    lista_passos = carregar_passos_padrao()
+    cadeias_aprovadas = get_similar_chains(vectorstore, pergunta)
+    cadeias_texto = [doc.page_content for doc in cadeias_aprovadas]
+    return processo_raciocinio_completo(modelo, pergunta, cadeias_texto, lista_passos)
+
+def processo_raciocinio_completo(modelo, pergunta, cadeias_aprovadas, lista_passos, max_iteracoes=10):
+    cadeia_inicial = gerar_cadeia_raciocinio(modelo, pergunta, cadeias_aprovadas)
+    passos_executados = [cadeia_inicial]
+    
+    for iteracao in range(max_iteracoes):
+        avaliacao = avaliar_proximo_passo(modelo, pergunta, "\n".join(passos_executados), lista_passos)
+        if "Resposta final" in avaliacao:
+            break
+        
+        proximo_passo = avaliacao.split(": ")[1]
+        resultado_passo = executar_passo(modelo, pergunta, proximo_passo, "\n".join(passos_executados))
+        passos_executados.append(f"{proximo_passo}:\n{resultado_passo}")
+        
+        if iteracao == max_iteracoes - 1:
+            passos_executados.append("Aviso: Limite máximo de iterações atingido.")
+    
+    resposta_final = sintetizar_resposta_final(modelo, pergunta, "\n".join(passos_executados))
+    return resposta_final, passos_executados
+
+def gerar_cadeia_raciocinio(modelo, pergunta, cadeias_aprovadas):
+    cadeias_relevantes = []
+    for cadeia in cadeias_aprovadas:
+        if avaliar_relevancia_cadeia(modelo, pergunta, cadeia):
+            cadeia_preparada = preparar_cadeia_para_prompt(modelo, pergunta, cadeia)
+            cadeias_relevantes.append(cadeia_preparada)
+    
+    cadeias_texto = "\n\n".join(cadeias_relevantes)
+    
+    prompt = f"""
+    Pergunta: {pergunta}
+
+    Com base nas seguintes cadeias de raciocínio aprovadas e relevantes:
+    {cadeias_texto}
+
+    Gere uma cadeia de raciocínio inicial para responder à pergunta, seguindo uma sequência lógica de passos.
+    """
+    return modelo.gerar(prompt, max_tokens=500, temperatura=0.7)
+
+def avaliar_relevancia_cadeia(modelo, pergunta, cadeia):
+    prompt = f"""
+    Pergunta: {pergunta}
+
+    Cadeia de raciocínio:
+    {cadeia}
+
+    Esta cadeia de raciocínio é relevante para responder à pergunta acima?
+    Responda apenas com "Sim" ou "Não".
+    """
+    resposta = modelo.gerar(prompt, max_tokens=10, temperatura=0.3)
+    return resposta.strip().lower() == "sim"
+
+def avaliar_proximo_passo(modelo, pergunta, passos_anteriores, lista_passos):
+    prompt = f"""
+    Pergunta: {pergunta}
+
+    Passos anteriores:
+    {passos_anteriores}
+
+    Com base nos passos anteriores, determine se devemos continuar com mais um passo ou se já temos a resposta final.
+    Se precisarmos de mais um passo, escolha o próximo passo mais apropriado da seguinte lista:
+    {lista_passos}
+
+    Responda apenas com "Próximo passo: [nome do passo]" ou "Resposta final".
+    """
+    return modelo.gerar(prompt, max_tokens=50, temperatura=0.3)
+
+def executar_passo(modelo, pergunta, passo, passos_anteriores):
+    prompt = f"""
+    Pergunta: {pergunta}
+
+    Passos anteriores:
+    {passos_anteriores}
+
+    Execute o seguinte passo: {passo}
+    Forneça uma análise detalhada para este passo.
+    """
+    return modelo.gerar(prompt, max_tokens=300, temperatura=0.7)
+
+def sintetizar_resposta_final(modelo, pergunta, todos_passos):
+    prompt = f"""
+    Pergunta original: {pergunta}
+
+    Com base nos seguintes passos de raciocínio:
+    {todos_passos}
+
+    Por favor, forneça uma resposta final completa e detalhada para a pergunta.
+    """
+    return modelo.gerar(prompt, max_tokens=500, temperatura=0.5)
+
+def resumir_cadeia(modelo, cadeia, max_tokens=200):
+    prompt = f"""
+    Resuma a seguinte cadeia de raciocínio em no máximo {max_tokens} tokens:
+
+    {cadeia}
+    """
+    return modelo.gerar(prompt, max_tokens=max_tokens, temperatura=0.7)
+
+def preparar_cadeia_para_prompt(modelo, pergunta, cadeia, max_tokens=500):
+    if len(cadeia.split()) > max_tokens:
+        cadeia_resumida = resumir_cadeia(modelo, cadeia, max_tokens)
+        return f"{cadeia_resumida}\n\nLembre-se da pergunta original: {pergunta}"
+    return cadeia
 
 def initialize_vectorstore():
     embeddings = HuggingFaceEmbeddings()
@@ -63,91 +187,6 @@ def get_similar_chains(vectorstore, query, top_k=3):
     if results:
         return results
     return []
-
-def generate_response(user_prompt, similar_chains):
-    model = Ollama(model="llamaPT")
-
-    examples = "\n\n".join([f"Exemplo {i+1}:\n{doc.page_content}" for i, doc in enumerate(similar_chains)])
-
-    system_prompt = f"""Você é um assistente AI que explica seu raciocínio passo a passo em português. Para cada passo, forneça um título e um conteúdo. Decida se precisa continuar ou se está pronto para dar a resposta final. Responda em formato JSON com as chaves "title", "content" e "next_action" (sendo "continue" ou "final_answer"). Use suas habilidades completas, incluindo a geração de código quando necessário. Use o raciocínio chain-of-thought para chegar à resposta. Mantenha o contexto acumulado para referência futura.
-
-Exemplos de cadeias de raciocínio aprovadas anteriormente:
-
-{examples}
-
-Exemplo de cadeia de raciocínio sofisticada:
-
-1. Compreensão da pergunta
-2. Identificação dos dados relevantes
-3. Formulação de hipóteses
-4. Análise lógica
-5. Verificação da consistência
-6. Consideração de alternativas
-7. Síntese da resposta
-8. Revisão e refinamento
-
-Inclua etapas de verificação da lógica em seu processo de raciocínio."""
-
-    accumulated_context = ""
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f'Usuário: "{user_prompt}"'}
-    ]
-
-    steps = []
-    step_count = 1
-    total_thinking_time = 0
-
-    while True:
-        conversation = "\n".join([f"{m['content']}" for m in messages])
-        prompt_with_context = f"{conversation}\n\nContexto acumulado:{accumulated_context}\n\nAssistente:"
-
-        start_time = time.time()
-        step_data = make_api_call(model, prompt_with_context, 500)
-        end_time = time.time()
-        thinking_time = end_time - start_time
-        total_thinking_time += thinking_time
-
-        if not all(key in step_data for key in ('title', 'content', 'next_action')):
-            step_data = {"title": "Erro", "content": "Resposta inválida ou incompleta.", "next_action": "final_answer"}
-
-        accumulated_context += f"\nPasso {step_count} - {step_data['title']}:\n{step_data['content']}"
-        steps.append((f"Passo {step_count}: {step_data['title']}", step_data['content'], thinking_time))
-
-        # Formata o passo para exibição
-        step_output = f"### {steps[-1][0]}\n{steps[-1][1]}\n\n"
-        # Adiciona tempo parcial
-        step_output += f"Tempo parcial de processamento: {steps[-1][2]:.2f} segundos\n\n"
-
-        # Yield o passo atual e o tempo total até agora
-        yield (step_output, total_thinking_time)
-
-        messages.append({"role": "assistant", "content": f"```json\n{json.dumps(step_data, ensure_ascii=False)}\n```"})
-
-        if step_data['next_action'] == 'final_answer' or step_count >= 8:
-            break
-
-        step_count += 1
-
-    # Geração da resposta final
-    final_prompt = f"{conversation}\n\nContexto acumulado:{accumulated_context}\n\nAssistente:"
-    start_time = time.time()
-    final_data = make_api_call(model, final_prompt, 500)
-    end_time = time.time()
-    thinking_time = end_time - start_time
-    total_thinking_time += thinking_time
-
-    if not all(key in final_data for key in ('title', 'content')):
-        final_data = {"title": "Erro", "content": "Resposta inválida ou incompleta."}
-
-    steps.append(("Resposta Final", final_data.get('content', 'Resposta não disponível.'), thinking_time))
-    final_output = f"### Resposta Final\n{final_data.get('content', 'Resposta não disponível.')}\n\n"
-    final_output += f"Tempo total de processamento: {total_thinking_time:.2f} segundos\n\n"
-
-    yield (final_output, total_thinking_time)
-
-def process_query(vectorstore, query):
-    return generate_response(query, get_similar_chains(vectorstore, query))
 
 def approve_chain(vectorstore, steps, total_time):
     chain_text = "\n".join([f"{title}\n{content}" for title, content, _ in steps])
